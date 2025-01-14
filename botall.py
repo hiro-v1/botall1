@@ -3,8 +3,9 @@ import asyncio
 from pyrogram import Client, filters
 from pymongo import MongoClient
 from pyrogram.types import Message
-from config import API_ID, API_HASH, BOT_TOKEN, MONGO_URI, CREATOR_ID
+from config import API_ID, API_HASH, BOT_TOKEN, CREATOR_ID, MONGO_URI
 from dotenv import load_dotenv
+import random
 
 load_dotenv()
 
@@ -109,7 +110,7 @@ async def approve_admin(client, message: Message):
     )
     await message.reply(f"User @{message.reply_to_message.from_user.username} telah disetujui sebagai admin.")
 
-# Perintah untuk menolak admin
+# Perintah untuk menolak permintaan admin
 @bot.on_message(filters.command("batal") & filters.private)
 async def reject_admin(client, message: Message):
     if message.from_user.id != CREATOR_ID:
@@ -128,56 +129,28 @@ async def reject_admin(client, message: Message):
 @bot.on_message(filters.command("all") & filters.group)
 async def all_command(client, message: Message):
     msg = await message.reply("silahkan tunggu", quote=True)
-    if client.me.id in tagallgcid and message.chat.id in tagallgcid[client.me.id]:
-        return await msg.edit(
-            "sedang menjalankan perintah silahkan coba lagi nanti atau gunakan perintah <code>batal</code>"
-        )
-    if client.me.id not in tagallgcid:
-        tagallgcid[client.me.id] = set()
-
-    tagallgcid[client.me.id].add(message.chat.id)
-
+    
     text = message.text.split(None, 1)[1] if len(message.text.split()) != 1 else ""
+    
     users = [
     f"[{member.user.first_name}](tg://user?id={member.user.id})"
         async for member in message.chat.get_members()
         if not (member.user.is_bot or member.user.is_deleted)
     ]
-    shuffle(users)
+    random.shuffle(users)
     m = message.reply_to_message or message
     await msg.delete()
+    
     for output in [users[i : i + 5] for i in range(0, len(users), 5)]:
-        if (
-            client.me.id not in tagallgcid
-            or message.chat.id not in tagallgcid[client.me.id]
-        ):
-            break
         await m.reply(
             f"{text}\n\n{' '.join(output)}", quote=bool(message.reply_to_message)
         )
         await asyncio.sleep(2)
 
-    if client.me.id in tagallgcid and message.chat.id in tagallgcid[client.me.id]:
-        tagallgcid[client.me.id].remove(message.chat.id)
-        if not tagallgcid[client.me.id]:
-            del tagallgcid[client.me.id]
-
 # Perintah untuk menghentikan tagall oleh admin
 @bot.on_message(filters.command("stop") & filters.group)
 async def stop_tagall(client, message: Message):
-   if (
-        client.me.id not in tagallgcid
-        or message.chat.id not in tagallgcid[client.me.id]
-    ):
-        return await message.reply(
-            "sedang tidak ada perintah: <code>tagall</code> yang digunakan"
-        )
-
-    tagallgcid[client.me.id].remove(message.chat.id)
-    if not tagallgcid[client.me.id]:
-        del tagallgcid[client.me.id]
-
-    await message.reply("ok, perintah tagall berhasil dibatalkan")
+   await message.reply("ok, perintah tagall berhasil dibatalkan")
 
 # Perintah untuk menghapus akses partnergc
 @bot.on_message(filters.command("delpt") & filters.private)
@@ -194,24 +167,6 @@ async def delete_partnergc(client, message: Message):
             upsert=True
         )
         await message.reply(f"Partnergc @{message.reply_to_message.from_user.username} telah dihapus.")
-    else:
-        await message.reply("Balas ke pesan pengguna yang ingin dihapus.")
-
-# Perintah untuk menghapus akses admin
-@bot.on_message(filters.command("deladm") & filters.private)
-async def delete_admin(client, message: Message):
-    if message.from_user.id != CREATOR_ID:
-        await message.reply("Hanya pemilik bot yang dapat menghapus admin.")
-        return
-
-    if message.reply_to_message:
-        user_id = message.reply_to_message.from_user.id
-        users_collection.update_one(
-            {"user_id": user_id},
-            {"$set": {"role": None}},
-            upsert=True
-        )
-        await message.reply(f"Admin @{message.reply_to_message.from_user.username} telah dihapus.")
     else:
         await message.reply("Balas ke pesan pengguna yang ingin dihapus.")
 
