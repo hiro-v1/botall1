@@ -1,4 +1,4 @@
-import time 
+import time
 import asyncio
 from pyrogram import Client, filters
 from pymongo import MongoClient
@@ -94,7 +94,7 @@ async def request_admin(client, message: Message):
 
     await bot.send_message(CREATOR_ID, f"Pengguna @{message.from_user.username} mengajukan diri sebagai admin bot. Ketik /setuju atau /batal untuk menyetujui atau menolak permintaan ini.")
 
-# Perintah untuk menyetujui atau menolak permintaan admin
+# Perintah untuk menyetujui admin
 @bot.on_message(filters.command("setuju") & filters.private)
 async def approve_admin(client, message: Message):
     if message.from_user.id != CREATOR_ID:
@@ -109,7 +109,7 @@ async def approve_admin(client, message: Message):
     )
     await message.reply(f"User @{message.reply_to_message.from_user.username} telah disetujui sebagai admin.")
 
-# Perintah untuk menolak permintaan admin
+# Perintah untuk menolak admin
 @bot.on_message(filters.command("batal") & filters.private)
 async def reject_admin(client, message: Message):
     if message.from_user.id != CREATOR_ID:
@@ -127,47 +127,57 @@ async def reject_admin(client, message: Message):
 # Perintah untuk request tagall oleh partnergc
 @bot.on_message(filters.command("all") & filters.group)
 async def all_command(client, message: Message):
-    if message.from_user.id not in get_partnergcs():
-        await message.reply("Hanya partnergc yang terdaftar yang dapat meminta tagall.")
-        return
+    msg = await message.reply("silahkan tunggu", quote=True)
+    if client.me.id in tagallgcid and message.chat.id in tagallgcid[client.me.id]:
+        return await msg.edit(
+            "sedang menjalankan perintah silahkan coba lagi nanti atau gunakan perintah <code>batal</code>"
+        )
+    if client.me.id not in tagallgcid:
+        tagallgcid[client.me.id] = set()
 
-    if len(message.text.split(" ", 1)) < 2:
-        await message.reply("Harap kirim perintah 'all' diikuti pesan.")
-        return
+    tagallgcid[client.me.id].add(message.chat.id)
 
-    message_text = message.text.split(" ", 1)[1]
-    save_tagall_request(message.from_user.id, message.chat.id, message_text)
+    text = message.text.split(None, 1)[1] if len(message.text.split()) != 1 else ""
+    users = [
+    f"[{member.user.first_name}](tg://user?id={member.user.id})"
+        async for member in message.chat.get_members()
+        if not (member.user.is_bot or member.user.is_deleted)
+    ]
+    shuffle(users)
+    m = message.reply_to_message or message
+    await msg.delete()
+    for output in [users[i : i + 5] for i in range(0, len(users), 5)]:
+        if (
+            client.me.id not in tagallgcid
+            or message.chat.id not in tagallgcid[client.me.id]
+        ):
+            break
+        await m.reply(
+            f"{text}\n\n{' '.join(output)}", quote=bool(message.reply_to_message)
+        )
+        await asyncio.sleep(2)
 
-    await message.reply("Permintaan tagall Anda telah dikirim dan sedang menunggu persetujuan admin.")
-
-# Perintah untuk menyetujui permintaan tagall oleh admin
-@bot.on_message(filters.command("oktag") & filters.group)
-async def approve_tagall(client, message: Message):
-    if message.from_user.id not in get_approved_admins():
-        await message.reply("Hanya admin yang disetujui yang dapat menyetujui permintaan tagall.")
-        return
-
-    request = requests_collection.find_one({"chat_id": message.chat.id, "status": "pending"})
-    if request:
-        active_members = await track_active_members(message)
-        await perform_tagall(message.chat.id, request["message_text"], active_members)
-        update_tagall_request_status(request["_id"], "approved")
-        await message.reply("Permintaan tagall telah disetujui dan dieksekusi.")
-    else:
-        await message.reply("Tidak ada permintaan tagall yang menunggu persetujuan.")
+    if client.me.id in tagallgcid and message.chat.id in tagallgcid[client.me.id]:
+        tagallgcid[client.me.id].remove(message.chat.id)
+        if not tagallgcid[client.me.id]:
+            del tagallgcid[client.me.id]
 
 # Perintah untuk menghentikan tagall oleh admin
 @bot.on_message(filters.command("stop") & filters.group)
 async def stop_tagall(client, message: Message):
-    if message.from_user.id not in get_approved_admins():
-        await message.reply("Hanya admin yang disetujui yang dapat menghentikan tagall.")
-        return
+   if (
+        client.me.id not in tagallgcid
+        or message.chat.id not in tagallgcid[client.me.id]
+    ):
+        return await message.reply(
+            "sedang tidak ada perintah: <code>tagall</code> yang digunakan"
+        )
 
-    requests_collection.update_many(
-        {"status": "pending", "chat_id": message.chat.id},
-        {"$set": {"status": "stopped"}}
-    )
-    await message.reply("Semua permintaan tagall yang menunggu telah dihentikan.")
+    tagallgcid[client.me.id].remove(message.chat.id)
+    if not tagallgcid[client.me.id]:
+        del tagallgcid[client.me.id]
+
+    await message.reply("ok, perintah tagall berhasil dibatalkan")
 
 # Perintah untuk menghapus akses partnergc
 @bot.on_message(filters.command("delpt") & filters.private)
