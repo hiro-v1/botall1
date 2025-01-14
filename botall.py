@@ -1,8 +1,8 @@
 import time
 import asyncio
 from pyrogram import Client, filters
-from pymongo import MongoClient
 from pyrogram.types import Message
+from pymongo import MongoClient
 from config import API_ID, API_HASH, BOT_TOKEN, MONGO_URI, CREATOR_ID
 from dotenv import load_dotenv
 
@@ -60,25 +60,28 @@ async def track_active_members(message):
     active_members = [member for member in active_members if time.time() - message.date.timestamp() <= 300]
     return active_members
 
-# Perintah untuk mendaftarkan partnergc
-@bot.on_message(filters.command("jadipt") & filters.private)
-async def register_partnergc(client, message: Message):
-    if message.from_user.id in get_partnergcs():
-        await message.reply("Anda sudah terdaftar sebagai partnergc.")
+# Perintah untuk mendaftarkan diri sebagai admin bot
+@bot.on_message(filters.command("jadiadm") & filters.private)
+async def register_admin(client, message: Message):
+    if message.from_user.id in get_approved_admins():
+        await message.reply("Anda sudah menjadi admin bot.")
         return
+
+    # Mengirim permintaan ke pemilik bot untuk persetujuan
+    await bot.send_message(CREATOR_ID, f"Permintaan menjadi admin bot dari @{message.from_user.username}. Apakah Anda menyetujuinya? Ketik /setuju untuk menerima.")
     
     users_collection.update_one(
         {"user_id": message.from_user.id},
-        {"$set": {"role": "partnergc", "approved": False}},  # Menunggu persetujuan
+        {"$set": {"role": "admin", "approved": False}},  # Menunggu persetujuan
         upsert=True
     )
-    await message.reply("Anda telah terdaftar sebagai partnergc. Tunggu persetujuan dari pemilik bot atau admin.")
+    await message.reply("Permintaan Anda untuk menjadi admin bot telah dikirim dan menunggu persetujuan.")
 
-# Perintah untuk menyetujui partnergc
+# Perintah untuk menyetujui admin bot
 @bot.on_message(filters.command("setuju") & filters.private)
-async def approve_partnergc(client, message: Message):
+async def approve_admin(client, message: Message):
     if message.from_user.id != CREATOR_ID:
-        await message.reply("Hanya pemilik bot yang dapat menyetujui partnergc.")
+        await message.reply("Hanya pemilik bot yang dapat menyetujui admin.")
         return
 
     user_id = message.reply_to_message.from_user.id
@@ -87,7 +90,21 @@ async def approve_partnergc(client, message: Message):
         {"$set": {"approved": True}},
         upsert=True
     )
-    await message.reply(f"User {message.reply_to_message.from_user.username} telah disetujui sebagai partnergc.")
+    await message.reply(f"User @{message.reply_to_message.from_user.username} telah disetujui sebagai admin bot.")
+
+# Perintah untuk mendaftar sebagai partnergc
+@bot.on_message(filters.command("jadipt") & filters.private)
+async def register_partnergc(client, message: Message):
+    if message.from_user.id in get_partnergcs():
+        await message.reply("Anda sudah terdaftar sebagai partnergc.")
+        return
+
+    users_collection.update_one(
+        {"user_id": message.from_user.id},
+        {"$set": {"role": "partnergc", "approved": False}},  # Menunggu persetujuan
+        upsert=True
+    )
+    await message.reply("Anda telah terdaftar sebagai partnergc. Tunggu persetujuan dari pemilik bot atau admin.")
 
 # Perintah untuk request tagall oleh partnergc
 @bot.on_message(filters.command("all") & filters.group)
@@ -139,7 +156,7 @@ async def stop_tagall(client, message: Message):
 async def help(client, message: Message):
     help_text = """
     *Panduan Penggunaan Bot*:
-    
+
     1. **Mendaftar sebagai Partnergc**: Kirim perintah `/jadipt` untuk mendaftar sebagai partnergc (menunggu persetujuan admin).
     2. **Menyetujui Partnergc**: Admin atau pemilik bot dapat menyetujui partnergc dengan perintah `/setuju`.
     3. **Meminta Tagall**: Partnergc yang disetujui dapat mengirim perintah `/all [pesan]` untuk meminta tagall.
@@ -150,6 +167,28 @@ async def help(client, message: Message):
     Silakan ikuti petunjuk di atas untuk menggunakan bot ini.
     """
     await message.reply(help_text)
+
+# Perintah untuk melihat daftar partnergc
+@bot.on_message(filters.command("cekpt"))
+async def cek_partnergc(client, message: Message):
+    if message.from_user.id != CREATOR_ID:
+        await message.reply("Hanya pemilik bot yang dapat melihat daftar partnergc.")
+        return
+
+    partnergcs = get_partnergcs()
+    partnergc_usernames = [f"@{user}" for user in partnergcs]
+    await message.reply(f"Daftar PartnerGC: \n" + "\n".join(partnergc_usernames))
+
+# Perintah untuk melihat daftar admin yang disetujui
+@bot.on_message(filters.command("cekad"))
+async def cek_admin(client, message: Message):
+    if message.from_user.id != CREATOR_ID:
+        await message.reply("Hanya pemilik bot yang dapat melihat daftar admin.")
+        return
+
+    admins = get_approved_admins()
+    admin_usernames = [f"@{user}" for user in admins]
+    await message.reply(f"Daftar Admin yang disetujui: \n" + "\n".join(admin_usernames))
 
 # Menjalankan bot
 if __name__ == "__main__":
