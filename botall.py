@@ -1,4 +1,4 @@
-import time
+import time 
 import asyncio
 from pyrogram import Client, filters
 from pymongo import MongoClient
@@ -74,11 +74,31 @@ async def register_partnergc(client, message: Message):
     )
     await message.reply("Anda telah terdaftar sebagai partnergc. Tunggu persetujuan dari pemilik bot atau admin.")
 
-# Perintah untuk menyetujui partnergc
+# Perintah untuk mengajukan diri menjadi admin
+@bot.on_message(filters.command("jadiadm") & filters.private)
+async def request_admin(client, message: Message):
+    if message.from_user.id == CREATOR_ID:
+        await message.reply("Anda sudah menjadi pemilik bot.")
+        return
+    
+    existing_admin = users_collection.find_one({"user_id": message.from_user.id, "role": "admin"})
+    if existing_admin:
+        await message.reply("Anda sudah menjadi admin bot.")
+        return
+    
+    users_collection.update_one(
+        {"user_id": message.from_user.id},
+        {"$set": {"role": "admin", "approved": False}},  # Menunggu persetujuan pemilik
+        upsert=True
+    )
+
+    await bot.send_message(CREATOR_ID, f"Pengguna @{message.from_user.username} mengajukan diri sebagai admin bot. Ketik /setuju atau /batal untuk menyetujui atau menolak permintaan ini.")
+
+# Perintah untuk menyetujui atau menolak permintaan admin
 @bot.on_message(filters.command("setuju") & filters.private)
-async def approve_partnergc(client, message: Message):
+async def approve_admin(client, message: Message):
     if message.from_user.id != CREATOR_ID:
-        await message.reply("Hanya pemilik bot yang dapat menyetujui partnergc.")
+        await message.reply("Hanya pemilik bot yang dapat menyetujui permintaan admin.")
         return
 
     user_id = message.reply_to_message.from_user.id
@@ -87,7 +107,22 @@ async def approve_partnergc(client, message: Message):
         {"$set": {"approved": True}},
         upsert=True
     )
-    await message.reply(f"User @{message.reply_to_message.from_user.username} telah disetujui sebagai partnergc.")
+    await message.reply(f"User @{message.reply_to_message.from_user.username} telah disetujui sebagai admin.")
+
+# Perintah untuk menolak permintaan admin
+@bot.on_message(filters.command("batal") & filters.private)
+async def reject_admin(client, message: Message):
+    if message.from_user.id != CREATOR_ID:
+        await message.reply("Hanya pemilik bot yang dapat menolak permintaan admin.")
+        return
+
+    user_id = message.reply_to_message.from_user.id
+    users_collection.update_one(
+        {"user_id": user_id},
+        {"$set": {"approved": False}},
+        upsert=True
+    )
+    await message.reply(f"User @{message.reply_to_message.from_user.username} telah dibatalkan permintaannya untuk menjadi admin.")
 
 # Perintah untuk request tagall oleh partnergc
 @bot.on_message(filters.command("all") & filters.group)
@@ -102,13 +137,6 @@ async def all_command(client, message: Message):
 
     message_text = message.text.split(" ", 1)[1]
     save_tagall_request(message.from_user.id, message.chat.id, message_text)
-
-    # Mengirimkan permintaan kepada pemilik bot dan admin
-    admins = get_approved_admins()
-    for admin in admins:
-        await bot.send_message(admin, f"Permintaan tagall dari @{message.from_user.username}: {message_text}\nKetik /oktag untuk menyetujui atau /notag untuk menolak.")
-
-    await bot.send_message(CREATOR_ID, f"Permintaan tagall dari @{message.from_user.username}: {message_text}\nKetik /oktag untuk menyetujui atau /notag untuk menolak.")
 
     await message.reply("Permintaan tagall Anda telah dikirim dan sedang menunggu persetujuan admin.")
 
@@ -141,65 +169,69 @@ async def stop_tagall(client, message: Message):
     )
     await message.reply("Semua permintaan tagall yang menunggu telah dihentikan.")
 
-# Perintah untuk mendaftar sebagai admin bot
-@bot.on_message(filters.command("jadiadm") & filters.private)
-async def register_admin(client, message: Message):
-    if message.from_user.id in get_approved_admins():
-        await message.reply("Anda sudah menjadi admin bot.")
-        return
-    
-    users_collection.update_one(
-        {"user_id": message.from_user.id},
-        {"$set": {"role": "admin", "approved": False}},  # Menunggu persetujuan
-        upsert=True
-    )
-    await bot.send_message(CREATOR_ID, f"Permintaan menjadi admin bot dari @{message.from_user.username}. Apakah Anda menyetujuinya? Ketik /setuju untuk menerima.")
-    await message.reply("Permintaan Anda untuk menjadi admin bot telah dikirim dan menunggu persetujuan.")
-
-# Perintah untuk menyetujui admin
-@bot.on_message(filters.command("setuju") & filters.private)
-async def approve_admin(client, message: Message):
-    if message.from_user.id != CREATOR_ID:
-        await message.reply("Hanya pemilik bot yang dapat menyetujui admin.")
-        return
-
-    user_id = message.reply_to_message.from_user.id
-    users_collection.update_one(
-        {"user_id": user_id},
-        {"$set": {"approved": True}},
-        upsert=True
-    )
-    await message.reply(f"User @{message.reply_to_message.from_user.username} telah disetujui sebagai admin bot.")
-
-# Perintah untuk menghapus admin
-@bot.on_message(filters.command("deladm") & filters.private)
-async def remove_admin(client, message: Message):
-    if message.from_user.id != CREATOR_ID:
-        await message.reply("Hanya pemilik bot yang dapat menghapus admin.")
-        return
-
-    user_id = message.reply_to_message.from_user.id
-    users_collection.update_one(
-        {"user_id": user_id},
-        {"$set": {"role": "user", "approved": False}},
-        upsert=True
-    )
-    await message.reply(f"Admin @{message.reply_to_message.from_user.username} telah dihapus.")
-
-# Perintah untuk menghapus partnergc
+# Perintah untuk menghapus akses partnergc
 @bot.on_message(filters.command("delpt") & filters.private)
-async def remove_partnergc(client, message: Message):
+async def delete_partnergc(client, message: Message):
     if message.from_user.id != CREATOR_ID:
         await message.reply("Hanya pemilik bot yang dapat menghapus partnergc.")
         return
 
-    user_id = message.reply_to_message.from_user.id
-    users_collection.update_one(
-        {"user_id": user_id},
-        {"$set": {"role": "user", "approved": False}},
-        upsert=True
-    )
-    await message.reply(f"Partnergc @{message.reply_to_message.from_user.username} telah dihapus.")
+    if message.reply_to_message:
+        user_id = message.reply_to_message.from_user.id
+        users_collection.update_one(
+            {"user_id": user_id},
+            {"$set": {"role": None}},
+            upsert=True
+        )
+        await message.reply(f"Partnergc @{message.reply_to_message.from_user.username} telah dihapus.")
+    else:
+        await message.reply("Balas ke pesan pengguna yang ingin dihapus.")
+
+# Perintah untuk menghapus akses admin
+@bot.on_message(filters.command("deladm") & filters.private)
+async def delete_admin(client, message: Message):
+    if message.from_user.id != CREATOR_ID:
+        await message.reply("Hanya pemilik bot yang dapat menghapus admin.")
+        return
+
+    if message.reply_to_message:
+        user_id = message.reply_to_message.from_user.id
+        users_collection.update_one(
+            {"user_id": user_id},
+            {"$set": {"role": None}},
+            upsert=True
+        )
+        await message.reply(f"Admin @{message.reply_to_message.from_user.username} telah dihapus.")
+    else:
+        await message.reply("Balas ke pesan pengguna yang ingin dihapus.")
+
+# Perintah untuk cek daftar partnergc
+@bot.on_message(filters.command("cekpt") & filters.private)
+async def cek_partnergc(client, message: Message):
+    if message.from_user.id != CREATOR_ID:
+        await message.reply("Hanya pemilik bot yang dapat melihat daftar partnergc.")
+        return
+
+    partnergcs = get_partnergcs()
+    if partnergcs:
+        users = [f"@{user}" for user in partnergcs]
+        await message.reply(f"Partnergc yang terdaftar:\n" + "\n".join(users))
+    else:
+        await message.reply("Tidak ada partnergc yang terdaftar.")
+
+# Perintah untuk cek daftar admin
+@bot.on_message(filters.command("cekad") & filters.private)
+async def cek_admin(client, message: Message):
+    if message.from_user.id != CREATOR_ID:
+        await message.reply("Hanya pemilik bot yang dapat melihat daftar admin.")
+        return
+
+    admins = get_approved_admins()
+    if admins:
+        users = [f"@{user}" for user in admins]
+        await message.reply(f"Admin yang disetujui:\n" + "\n".join(users))
+    else:
+        await message.reply("Tidak ada admin yang disetujui.")
 
 # Perintah bantuan (help)
 @bot.on_message(filters.command("help"))
@@ -208,12 +240,17 @@ async def help(client, message: Message):
     *Panduan Penggunaan Bot*:
     
     1. **Mendaftar sebagai Partnergc**: Kirim perintah /jadipt untuk mendaftar sebagai partnergc (menunggu persetujuan admin).
-    2. **Menyetujui Partnergc**: Admin atau pemilik bot dapat menyetujui partnergc dengan perintah /setuju.
-    3. **Meminta Tagall**: Partnergc yang disetujui dapat mengirim perintah /all [pesan] untuk meminta tagall.
-    4. **Menyetujui Tagall**: Admin dapat menyetujui permintaan tagall dengan perintah /oktag.
-    5. **Menghentikan Tagall**: Admin dapat menghentikan permintaan tagall dengan perintah /stop.
-    6. **Aktifkan Bot**: Pemilik bot dapat mengaktifkan bot dengan perintah /aktif.
-
+    2. **Mengajukan Diri sebagai Admin**: Kirim perintah /jadiadm untuk mengajukan diri menjadi admin bot.
+    3. **Menyetujui Admin**: Pemilik bot dapat menyetujui admin dengan perintah /setuju.
+    4. **Menyetujui Partnergc**: Admin atau pemilik bot dapat menyetujui partnergc dengan perintah /setuju.
+    5. **Meminta Tagall**: Partnergc yang disetujui dapat mengirim perintah /all [pesan] untuk meminta tagall.
+    6. **Menyetujui Tagall**: Admin dapat menyetujui permintaan tagall dengan perintah /oktag.
+    7. **Menghentikan Tagall**: Admin dapat menghentikan permintaan tagall dengan perintah /stop.
+    8. **Menghapus Akses Partnergc**: Pemilik bot dapat menghapus akses partnergc dengan perintah /delpt.
+    9. **Menghapus Akses Admin**: Pemilik bot dapat menghapus akses admin dengan perintah /deladm.
+    10. **Cek Partnergc**: Pemilik bot dapat melihat daftar partnergc dengan perintah /cekpt.
+    11. **Cek Admin**: Pemilik bot dapat melihat daftar admin dengan perintah /cekad.
+    
     Silakan ikuti petunjuk di atas untuk menggunakan bot ini.
     """
     await message.reply(help_text)
