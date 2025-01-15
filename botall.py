@@ -46,20 +46,19 @@ def update_tagall_request_status(request_id, status):
     )
 
 # Fungsi untuk menjalankan tagall
-async def perform_tagall(group_id, message_text, active_members):
-    if active_members:
-        tag_message = f"{message_text}\n" + " ".join([f"@{member}" for member in active_members])
+async def perform_tagall(group_id, message_text, members, duration):
+    if members:
+        tag_message = f"{message_text}\n" + " ".join([f"@{member}" for member in members])
         await bot.send_message(group_id, tag_message)
+        await asyncio.sleep(duration * 60)  # Durasi dalam menit
     else:
-        await bot.send_message(group_id, "Tidak ada anggota aktif dalam 5 menit terakhir untuk ditandai.")
+        await bot.send_message(group_id, "Tidak ada anggota untuk ditandai.")
 
-# Fungsi untuk melacak anggota yang aktif dalam 5 menit terakhir
-async def track_active_members(message):
-    active_members = []
-    active_members.append(message.from_user.username)  # Menyimpan anggota yang aktif
-    await asyncio.sleep(300)  # Tunggu selama 5 menit
-    active_members = [member for member in active_members if time.time() - message.date.timestamp() <= 300]
-    return active_members
+# Fungsi untuk melacak anggota
+async def track_members(message):
+    members = []
+    members.append(message.from_user.username)  # Menyimpan anggota
+    return members
 
 # Perintah untuk mendaftarkan partnergc
 @bot.on_message(filters.command("jadipt") & filters.private)
@@ -149,23 +148,23 @@ async def approve_tagall(client, message: Message):
     if message.from_user.id not in get_approved_admins() and message.from_user.id != CREATOR_ID:
         await message.reply("Hanya admin yang dapat menyetujui tagall.")
         return
-    
+
     if message.reply_to_message:
         request = requests_collection.find_one({"user_id": message.reply_to_message.from_user.id, "status": "pending"})
         if request:
+            duration = int(message.text.split()[1]) if len(message.text.split()) > 1 else 5
             update_tagall_request_status(request["_id"], "approved")
             await message.reply(f"Permintaan tagall dari @{message.reply_to_message.from_user.username} telah disetujui.")
-            active_members = await track_active_members(message.reply_to_message)
-            await perform_tagall(request["chat_id"], request["message_text"], active_members)
+            members = await track_members(message.reply_to_message)
+            await perform_tagall(request["chat_id"], request["message_text"], members, duration)
             # Mengirim laporan selesai ke partnergc dan admin
             for admin_id in get_approved_admins() + [CREATOR_ID]:
-                await bot.send_message(admin_id, f"Permintaan tagall @{message.reply_to_message.from_user.username} telah selesai.")
+                await bot.send_message(admin_id, f"Permintaan tagall @{message.reply_to_message.from_user.username} telah selesai. Silakan SS dan kirim SS ke @{message.reply_to_message.from_user.username}.")
             await bot.send_message(request["user_id"], "Permintaan tagall telah selesai.")
         else:
             await message.reply("Permintaan tagall ini tidak ditemukan atau sudah diproses.")
     else:
         await message.reply("Balas ke permintaan tagall untuk menyetujui.")
-
 # Perintah untuk menolak tagall
 @bot.on_message(filters.command("notag") & filters.private)
 async def reject_tagall(client, message: Message):
