@@ -57,7 +57,8 @@ async def perform_tagall(group_id, message_text, members, duration):
 # Fungsi untuk melacak anggota
 async def track_members(message):
     members = []
-    members.append(message.from_user.username)  # Menyimpan anggota
+    async for member in bot.get_chat_members(message.chat.id):
+        members.append(member.user.username)  # Menyimpan anggota
     return members
 
 # Perintah untuk mendaftarkan partnergc
@@ -152,7 +153,10 @@ async def approve_tagall(client, message: Message):
     if message.reply_to_message:
         request = requests_collection.find_one({"user_id": message.reply_to_message.from_user.id, "status": "pending"})
         if request:
-            duration = int(message.text.split()[1]) if len(message.text.split()) > 1 else 5
+            try:
+                duration = int(message.text.split()[1]) if len(message.text.split()) > 1 else 5
+            except ValueError:
+                duration = 5  # Default to 5 minutes if parsing fails
             update_tagall_request_status(request["_id"], "approved")
             await message.reply(f"Permintaan tagall dari @{message.reply_to_message.from_user.username} telah disetujui.")
             members = await track_members(message.reply_to_message)
@@ -165,6 +169,7 @@ async def approve_tagall(client, message: Message):
             await message.reply("Permintaan tagall ini tidak ditemukan atau sudah diproses.")
     else:
         await message.reply("Balas ke permintaan tagall untuk menyetujui.")
+
 # Perintah untuk menolak tagall
 @bot.on_message(filters.command("notag") & filters.private)
 async def reject_tagall(client, message: Message):
