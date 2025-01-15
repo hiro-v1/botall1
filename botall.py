@@ -1,5 +1,5 @@
 import asyncio
-import random import shuffle
+import random
 from pyrogram import Client, filters
 from pymongo import MongoClient
 from pyrogram.types import Message
@@ -18,7 +18,6 @@ requests_collection = db["requests"]
 # Inisialisasi bot dengan Pyrogram
 bot = Client("botall", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-
 # Fungsi untuk mendapatkan daftar admin yang disetujui
 def get_approved_admins():
     admins = users_collection.find({"role": "admin", "approved": True})
@@ -27,7 +26,7 @@ def get_approved_admins():
 # Fungsi untuk mendapatkan daftar partnergc
 def get_partnergcs():
     partnergcs = users_collection.find({"role": "partnergc"})
-    return [partnergc["user_id"] for partnergc in partnergcs]
+    return [partnergc["user_id"] for partnergcs in partnergcs]
 
 # Fungsi untuk menyimpan permintaan tagall ke MongoDB
 def save_tagall_request(user_id, chat_id, message_text):
@@ -49,41 +48,21 @@ def update_tagall_request_status(request_id, status):
 # Fungsi untuk menjalankan tagall
 tagallgcid = {}
 async def perform_tagall(group_id, message_text, members, duration):
-    msg = await message.reply("silahkan tunggu", quote=True)
-    if client.me.id in tagallgcid and message.chat.id in tagallgcid[client.me.id]:
-        return await msg.edit(
-            "sedang menjalankan perintah silahkan coba lagi nanti atau gunakan perintah <code>batal</code>"
-        )
-    if client.me.id not in tagallgcid:
-        tagallgcid[client.me.id] = set()
-
-    tagallgcid[client.me.id].add(message.chat.id)
-
-    text = message.text.split(None, 1)[1] if len(message.text.split()) != 1 else ""
+    text = message_text if message_text else ""
     users = [
-    f"[{member.user.first_name}](tg://user?id={member.user.id})"
-        async for member in message.chat.get_members()
+        f"[{member.user.first_name}](tg://user?id={member.user.id})"
+        async for member in bot.get_chat_members(group_id)
         if not (member.user.is_bot or member.user.is_deleted)
     ]
-    shuffle(users)
-    m = message.reply_to_message or message
-    await msg.delete()
-    for output in [users[i : i + 5] for i in range(0, len(users), 5)]:
-        if (
-            client.me.id not in tagallgcid
-            or message.chat.id not in tagallgcid[client.me.id]
-        ):
-            break
-        await m.reply(
-            f"{text}\n\n{' '.join(output)}", quote=bool(message.reply_to_message)
+    random.shuffle(users)
+    for output in [users[i:i + 5] for i in range(0, len(users), 5)]:
+        await bot.send_message(
+            group_id,
+            f"{text}\n\n{' '.join(output)}"
         )
         await asyncio.sleep(2)
-
-    if client.me.id in tagallgcid and message.chat.id in tagallgcid[client.me.id]:
-        tagallgcid[client.me.id].remove(message.chat.id)
-        if not tagallgcid[client.me.id]:
-            del tagallgcid[client.me.id]
-
+        
+    await asyncio.sleep(duration * 60)  # Durasi dalam menit
 
 # Fungsi untuk melacak anggota
 async def track_members(message):
@@ -169,7 +148,7 @@ async def tagall_request(client, message: Message):
     for admin_id in get_approved_admins() + [CREATOR_ID]:
         await bot.send_message(
             admin_id,
-            f"Ada permintaan tagall dari @{message.from_user.username}: {text}\n\nKetik /oktag [durasi] untuk menyetujui (1, 3, atau 5 menit) atau /notag untuk menolak."
+            f"Ada permintaan tagall dari @{message.from_user.username}: {text}\n\nKetik /oktag [1|3|5] untuk menyetujui atau /notag untuk menolak."
         )
 
     save_tagall_request(message.from_user.id, group_id, text)
