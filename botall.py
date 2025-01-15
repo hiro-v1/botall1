@@ -26,7 +26,7 @@ def get_approved_admins():
 # Fungsi untuk mendapatkan daftar partnergc
 def get_partnergcs():
     partnergcs = users_collection.find({"role": "partnergc"})
-    return [partnergc["user_id"] for partnergcs in partnergcs]
+    return [partnergc["user_id"] for partnergc in partnergcs]
 
 # Fungsi untuk menyimpan permintaan tagall ke MongoDB
 def save_tagall_request(user_id, chat_id, message_text):
@@ -111,13 +111,16 @@ async def approve_admin(client, message: Message):
         await message.reply("Hanya pemilik bot yang dapat menyetujui permintaan admin.")
         return
 
-    user_id = message.reply_to_message.from_user.id
-    users_collection.update_one(
-        {"user_id": user_id},
-        {"$set": {"approved": True}},
-        upsert=True
-    )
-    await message.reply(f"User @{message.reply_to_message.from_user.username} telah disetujui sebagai admin.")
+    if message.reply_to_message:
+        user_id = message.reply_to_message.from_user.id
+        users_collection.update_one(
+            {"user_id": user_id},
+            {"$set": {"approved": True}},
+            upsert=True
+        )
+        await message.reply(f"User @{message.reply_to_message.from_user.username} telah disetujui sebagai admin.")
+    else:
+        await message.reply("Balas ke permintaan admin untuk menyetujui.")
 
 # Perintah untuk menolak permintaan admin
 @bot.on_message(filters.command("batal") & filters.private)
@@ -126,13 +129,16 @@ async def reject_admin(client, message: Message):
         await message.reply("Hanya pemilik bot yang dapat menolak permintaan admin.")
         return
 
-    user_id = message.reply_to_message.from_user.id
-    users_collection.update_one(
-        {"user_id": user_id},
-        {"$set": {"approved": False}},
-        upsert=True
-    )
-    await message.reply(f"User @{message.reply_to_message.from_user.username} telah dibatalkan permintaannya untuk menjadi admin.")
+    if message.reply_to_message:
+        user_id = message.reply_to_message.from_user.id
+        users_collection.update_one(
+            {"user_id": user_id},
+            {"$set": {"approved": False}},
+            upsert=True
+        )
+        await message.reply(f"User @{message.reply_to_message.from_user.username} telah dibatalkan permintaannya untuk menjadi admin.")
+    else:
+        await message.reply("Balas ke permintaan admin untuk menolak.")
 
 # Perintah untuk request tagall oleh partnergc
 @bot.on_message(filters.command("tagin") & filters.private)
