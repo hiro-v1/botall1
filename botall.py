@@ -1,5 +1,5 @@
 import asyncio
-import random
+import random import shuffle
 from pyrogram import Client, filters
 from pymongo import MongoClient
 from pyrogram.types import Message
@@ -17,6 +17,7 @@ requests_collection = db["requests"]
 
 # Inisialisasi bot dengan Pyrogram
 bot = Client("botall", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+
 
 # Fungsi untuk mendapatkan daftar admin yang disetujui
 def get_approved_admins():
@@ -46,7 +47,8 @@ def update_tagall_request_status(request_id, status):
     )
 
 # Fungsi untuk menjalankan tagall
-async def tagall_cmd(client, message):
+tagallgcid = {}
+async def perform_tagall(group_id, message_text, members, duration):
     msg = await message.reply("silahkan tunggu", quote=True)
     if client.me.id in tagallgcid and message.chat.id in tagallgcid[client.me.id]:
         return await msg.edit(
