@@ -71,6 +71,20 @@ async def track_members(message):
         members.append(member.user.username)  # Menyimpan anggota
     return members
 
+# Forward pesan ke pemilik bot, admin bot, dan group chat
+async def forward_message_to_recipients(client, message, text):
+    # Forward to bot owner
+    await bot.send_message(CREATOR_ID, f"Pesan dari @{message.from_user.username}: {text}")
+    
+    # Forward to approved admins
+    for admin_id in get_approved_admins():
+        await bot.send_message(admin_id, f"Pesan dari @{message.from_user.username}: {text}")
+    
+    # Forward to group chats where the bot is an admin
+    async for dialog in bot.get_dialogs():
+        if dialog.chat.type in ["group", "supergroup"] and dialog.chat.permissions.can_send_messages:
+            await bot.send_message(dialog.chat.id, f"Pesan dari @{message.from_user.username}: {text}")
+
 # Perintah untuk mendaftarkan partnergc
 @bot.on_message(filters.command("jadipt") & filters.private)
 async def register_partnergc(client, message: Message):
@@ -158,6 +172,9 @@ async def tagall_request(client, message: Message):
         )
 
     save_tagall_request(message.from_user.id, group_id, text)
+    
+    # Forward message to recipients
+    await forward_message_to_recipients(client, message, text)
     
 # Perintah untuk menyetujui tagall
 @bot.on_message(filters.command("oktag") & filters.private)
@@ -279,6 +296,11 @@ async def help(client, message: Message):
     """
 
     await message.reply(help_text)
+
+# Perintah untuk memulai bot
+@bot.on_message(filters.command("start"))
+async def start(client, message: Message):
+    await message.reply("hallo saya adalah bot tagall buatan @hiro_v1 silahkan ketik help")
 
 # Jalankan bot
 bot.run()
