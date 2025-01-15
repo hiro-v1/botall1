@@ -134,15 +134,15 @@ async def tagall_request(client, message: Message):
     text = message.text.split(None, 1)[1] if len(message.text.split()) > 1 else ""
     group_id = message.chat.id
 
-    # Kirimkan permintaan tagall kepada admin dan pemilik bot
+    # Kirimkan permintaan tagall kepada admin dan pemilik bot dengan opsi durasi
     for admin_id in get_approved_admins() + [CREATOR_ID]:
         await bot.send_message(
             admin_id,
-            f"Ada permintaan tagall dari @{message.from_user.username}: {text}\n\nKetik /oktag untuk menyetujui atau /notag untuk menolak."
+            f"Ada permintaan tagall dari @{message.from_user.username}: {text}\n\nKetik /oktag [durasi] untuk menyetujui (1, 3, atau 5 menit) atau /notag untuk menolak."
         )
 
     save_tagall_request(message.from_user.id, group_id, text)
-
+    
 # Perintah untuk menyetujui tagall
 @bot.on_message(filters.command("oktag") & filters.private)
 async def approve_tagall(client, message: Message):
